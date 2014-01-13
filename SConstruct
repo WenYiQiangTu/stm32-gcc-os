@@ -1,0 +1,63 @@
+import os
+import rtconfig
+
+RTT_ROOT = os.path.normpath(os.getcwd() + '/../..')
+target = 'rtthread-stm32'
+
+# search path for C compiler
+bsp_path  = RTT_ROOT + '/bsp/project_t2'
+
+env = Environment(tools = ['mingw'],
+	AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
+	CC = rtconfig.CC, CCFLAGS = rtconfig.CFLAGS,
+	AR = rtconfig.AR, ARFLAGS = '-rc',
+	LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS)
+env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
+env.AppendUnique(CPPPATH = bsp_path)
+env.AppendUnique(CCFLAGS = ' -DUSE_STDPERIPH_DRIVER -D' + rtconfig.STM32_TYPE)
+
+Export('env')
+Export('RTT_ROOT')
+Export('rtconfig')
+
+objs = SConscript(RTT_ROOT + '/src/SConscript', variant_dir='build/src', duplicate=0)
+objs = objs + SConscript(RTT_ROOT + '/libcpu/SConscript', variant_dir='build/libcpu', duplicate=0)
+objs = objs + SConscript(RTT_ROOT + '/bsp/project_t2/Libraries/SConscript', variant_dir='build/Libraries', duplicate=0)
+
+if rtconfig.RT_USING_MINILIBC:
+	objs = objs + SConscript(RTT_ROOT + '/libc/minilibc/SConscript', variant_dir='build/minilibc', duplicate=0)
+
+if rtconfig.RT_USING_FINSH:
+	objs = objs + SConscript(RTT_ROOT + '/finsh/SConscript', variant_dir='build/finsh', duplicate=0)
+
+if rtconfig.RT_USING_DFS:
+	objs = objs + SConscript(RTT_ROOT + '/filesystem/dfs/SConscript', variant_dir='build/filesystem', duplicate=0)
+
+if rtconfig.RT_USING_LWIP:
+	objs = objs + SConscript(RTT_ROOT + '/net/lwip/SConscript', variant_dir='build/net/lwip', duplicate=0)
+
+if rtconfig.RT_USING_RTGUI:
+        objs = objs + ['device_info.c']
+        objs = objs + SConscript(RTT_ROOT + '/rtgui/SConscript', variant_dir='build/rtgui/', duplicate=0)
+
+src_bsp = ['application.c', 'startup.c', 'board.c', 'stm32f10x_it.c', 'lcd.c', '_tea5756.c', 'ili_lcd_general.c', 'usart.c']
+src_drv = ['sst25vfxx.c', 'vs1003.c', 'playerbuf.c']
+#src_drv = ['rtc.c', 'Tea5756.c', 'main.c']
+
+if rtconfig.RT_USING_DFS:
+	if rtconfig.STM32_TYPE == 'STM32F10X_HD':
+		src_drv += ['sdcard.c', 'utils.c']
+	else:
+		src_drv += ['msd.c']
+
+if rtconfig.RT_USING_LWIP:
+	if rtconfig.STM32_TYPE == 'STM32F10X_CL':
+		src_drv += ['stm32_eth.c']
+	else:
+		src_drv += ['enc28j60.c', 'http.c']
+
+objs = objs + env.Object(src_bsp + src_drv)
+
+TARGET = target + '.' + rtconfig.TARGET_EXT
+env.Program(TARGET, objs)
+env.AddPostAction(TARGET, rtconfig.POST_ACTION)
