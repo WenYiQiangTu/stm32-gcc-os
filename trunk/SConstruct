@@ -23,6 +23,7 @@ Export('rtconfig')
 objs = SConscript(RTT_ROOT + '/src/SConscript', variant_dir='build/src', duplicate=0)
 objs = objs + SConscript(RTT_ROOT + '/libcpu/SConscript', variant_dir='build/libcpu', duplicate=0)
 objs = objs + SConscript(RTT_ROOT + '/bsp/fighting/Libraries/SConscript', variant_dir='build/Libraries', duplicate=0)
+#objs = objs + SConscript(RTT_ROOT + '/bsp/fighting/application1', variant_dir='build/application1', duplicate=0)
 
 if rtconfig.RT_USING_MINILIBC:
 	objs = objs + SConscript(RTT_ROOT + '/libc/minilibc/SConscript', variant_dir='build/minilibc', duplicate=0)
@@ -40,6 +41,9 @@ if rtconfig.RT_USING_RTGUI:
         objs = objs + ['device_info.c']
         objs = objs + SConscript(RTT_ROOT + '/rtgui/SConscript', variant_dir='build/rtgui/', duplicate=0)
 
+
+objs = objs + SConscript(RTT_ROOT + '/bsp/fighting/apps/SConscript', variant_dir='build/apps/', duplicate=0)
+
 src_bsp = ['application.c', 'startup.c', 'board.c', 'stm32f10x_it.c', 'lcd.c', '_tea5756.c', 'ili_lcd_general.c', 'usart.c']
 src_drv = ['sst25vfxx.c', 'vs1003.c', 'playerbuf.c']
 #src_drv = ['rtc.c', 'Tea5756.c', 'main.c']
@@ -54,7 +58,7 @@ if rtconfig.RT_USING_LWIP:
 	if rtconfig.STM32_TYPE == 'STM32F10X_CL':
 		src_drv += ['stm32_eth.c']
 	else:
-		src_drv += ['enc28j60.c', 'http.c']
+		src_drv += ['enc28j60.c']
 
 objs = objs + env.Object(src_bsp + src_drv)
 
