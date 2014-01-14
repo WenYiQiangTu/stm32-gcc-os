@@ -100,7 +100,7 @@ void rtthread_startup(void)
 	rt_system_scheduler_init();
 
 #ifdef RT_USING_DFS
-        sst25vfxx_init();
+        //sst25vfxx_init();
 #endif
 
 	/* init all device */

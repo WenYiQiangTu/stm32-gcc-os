@@ -19,8 +19,8 @@
 
 #define MAX_ADDR_LEN    6
 
-#define CSACTIVE 	GPIOB->BRR = GPIO_Pin_13;
-#define CSPASSIVE	GPIOB->BSRR = GPIO_Pin_13;
+#define CSACTIVE 	GPIOA->BRR = GPIO_Pin_4;
+#define CSPASSIVE	GPIOA->BSRR = GPIO_Pin_4;
 
 struct net_device
 {
@@ -269,79 +269,66 @@ FINSH_FUNCTION_EXPORT(enc28j60, dump enc28j60 registers);
  */
 void enc28j60_isr()
 {
-	/* Variable definitions can be made now. */
-	volatile rt_uint32_t eir, pk_counter;
-	volatile rt_bool_t rx_activiated;
+    /* Variable definitions can be made now. */
+    volatile rt_uint32_t eir, pk_counter;
+    volatile rt_bool_t rx_activiated;
 
-	rx_activiated = RT_FALSE;
+    rx_activiated = RT_FALSE;
 
-	/* get EIR */
-	eir = spi_read(EIR);
-	// rt_kprintf("eir: 0x%08x\n", eir);
+    /* get EIR */
+    eir = spi_read(EIR);
+    // rt_kprintf("eir: 0x%08x\n", eir);
 
-	do
-	{
-		/* errata #4, PKTIF does not reliable */
-	    pk_counter = spi_read(EPKTCNT);
-	    if (pk_counter)
-	    {
-	        /* a frame has been received */
-	        eth_device_ready((struct eth_device*)&(enc28j60_dev->parent));
-
-			// switch to bank 0
-			enc28j60_set_bank(EIE);
-			// disable rx interrutps
-			spi_write_op(ENC28J60_BIT_FIELD_CLR, EIE, EIE_PKTIE);
-	    }
-
-		/* clear PKTIF */
-		if (eir & EIR_PKTIF)
-		{
-			enc28j60_set_bank(EIR);
-			spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_PKTIF);
-
-			rx_activiated = RT_TRUE;
-		}
-
-		/* clear DMAIF */
-	    if (eir & EIR_DMAIF)
-		{
-			enc28j60_set_bank(EIR);
-			spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_DMAIF);
-		}
-
-	    /* LINK changed handler */
-	    if ( eir & EIR_LINKIF)
-	    {
-	        enc28j60_check_link_status();
-
-	        /* read PHIR to clear the flag */
-	        enc28j60_phy_read(PHIR);
-
-			enc28j60_set_bank(EIR);
-			spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_LINKIF);
-	    }
-
-		if (eir & EIR_TXIF)
-		{
-			/* A frame has been transmitted. */
-			enc28j60_set_bank(EIR);
-			spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
-		}
-
-		/* TX Error handler */
-		if ((eir & EIR_TXERIF) != 0)
-		{
-            enc28j60_set_bank(ECON1);
-            spi_write_op(ENC28J60_BIT_FIELD_SET, ECON1, ECON1_TXRST);
-            spi_write_op(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
+    do
+    {
+        /* clear PKTIF */
+        if (eir & EIR_PKTIF)
+        {
             enc28j60_set_bank(EIR);
-			spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
-		}
+            spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_PKTIF);
 
-		eir = spi_read(EIR);
-		// rt_kprintf("inner eir: 0x%08x\n", eir);
-	} while ((rx_activiated != RT_TRUE && eir != 0));
+            rx_activiated = RT_TRUE;
+        }
+
+        /* clear DMAIF */
+        if (eir & EIR_DMAIF)
+        {
+            enc28j60_set_bank(EIR);
+            spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_DMAIF);
+        }
+
+        /* LINK changed handler (not used currently) */
+        if ( eir & EIR_LINKIF)
+        {
+            enc28j60_check_link_status();
+
+            /* read PHIR to clear the flag */
+            enc28j60_phy_read(PHIR);
+
+            enc28j60_set_bank(EIR);
+            spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_LINKIF);
+        }
+
+        if (eir & EIR_TXIF)
+        {
+            /* A frame has been transmitted. */
+            enc28j60_set_bank(EIR);
+            spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXIF);
+        }
+
+        /* TX Error handler */
+        if ((eir & EIR_TXERIF) != 0)
+        {
+            enc28j60_set_bank(ECON1);
+                spi_write_op(ENC28J60_BIT_FIELD_SET, ECON1, ECON1_TXRST);
+                spi_write_op(ENC28J60_BIT_FIELD_CLR, ECON1, ECON1_TXRST);
+                enc28j60_set_bank(EIR);
+                spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
+        }
+
+        eir = spi_read(EIR);
+        // rt_kprintf("inner eir: 0x%08x\n", eir);
+    } while ((rx_activiated != RT_TRUE && eir != 0));
 }
 
 /* RT-Thread Device Interface */
@@ -434,8 +421,12 @@ rt_err_t enc28j60_init(rt_device_t dev)
 	spi_write_op(ENC28J60_BIT_FIELD_SET, ECON2, ECON2_AUTOINC);
 
 	// switch to bank 0
+        // phy interrupt 
+//        enc28j60_phy_write(PHIE, PHIE_PGEIE | PHIE_PLNKIE);
+
 	enc28j60_set_bank(ECON1);
 	// enable interrutps
+        spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIE_INTIE|EIE_PKTIE|EIR_TXIF);
 	spi_write_op(ENC28J60_BIT_FIELD_SET, EIE, EIE_INTIE|EIE_PKTIE|EIR_TXIF);
 	// enable packet reception
 	spi_write_op(ENC28J60_BIT_FIELD_SET, ECON1, ECON1_RXEN);
@@ -691,10 +682,10 @@ static void GPIO_Configuration()
     EXTI_InitTypeDef EXTI_InitStructure;
 
     /* configure PB13 as external interrupt */
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
 
     /* Configure SPI1 pins:  SCK, MISO and MOSI ----------------------------*/
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7;
@@ -724,6 +715,8 @@ static void GPIO_Configuration()
 static void SetupSPI (void)
 {
     SPI_InitTypeDef SPI_InitStructure;
+
+    SPI_Cmd(SPI1, Disable);
     SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
     SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
     SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
