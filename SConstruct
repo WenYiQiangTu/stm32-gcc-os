@@ -5,7 +5,7 @@ RTT_ROOT = os.path.normpath(os.getcwd() + '/../..')
 target = 'rtthread-stm32'
 
 # search path for C compiler
-bsp_path  = RTT_ROOT + '/bsp/project_t2'
+bsp_path  = RTT_ROOT + '/bsp/fighting'
 
 env = Environment(tools = ['mingw'],
 	AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
@@ -22,7 +22,7 @@ Export('rtconfig')
 
 objs = SConscript(RTT_ROOT + '/src/SConscript', variant_dir='build/src', duplicate=0)
 objs = objs + SConscript(RTT_ROOT + '/libcpu/SConscript', variant_dir='build/libcpu', duplicate=0)
-objs = objs + SConscript(RTT_ROOT + '/bsp/project_t2/Libraries/SConscript', variant_dir='build/Libraries', duplicate=0)
+objs = objs + SConscript(RTT_ROOT + '/bsp/fighting/Libraries/SConscript', variant_dir='build/Libraries', duplicate=0)
 
 if rtconfig.RT_USING_MINILIBC:
 	objs = objs + SConscript(RTT_ROOT + '/libc/minilibc/SConscript', variant_dir='build/minilibc', duplicate=0)
