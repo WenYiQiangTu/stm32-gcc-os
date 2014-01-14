@@ -130,6 +130,10 @@
 #define PHIR             0x13
 #define PHLCON           0x14
 
+// ENC28J60 PHY PHIE Register Bit Definitions
+#define PHIE_PLNKIE     (1 << 4)
+#define PHIE_PGEIE      (1 << 4)
+
 // ENC28J60 ERXFCON Register Bit Definitions
 #define ERXFCON_UCEN     0x80
 #define ERXFCON_ANDOR    0x40
