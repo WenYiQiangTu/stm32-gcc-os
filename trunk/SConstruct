@@ -16,6 +16,8 @@ env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
 env.AppendUnique(CPPPATH = bsp_path)
 env.AppendUnique(CCFLAGS = ' -DUSE_STDPERIPH_DRIVER -D' + rtconfig.STM32_TYPE)
 
+env.Append(CPPPATH = [RTT_ROOT + '/bsp/fighting'])
+
 Export('env')
 Export('RTT_ROOT')
 Export('rtconfig')
@@ -58,7 +60,7 @@ if rtconfig.RT_USING_LWIP:
 	if rtconfig.STM32_TYPE == 'STM32F10X_CL':
 		src_drv += ['stm32_eth.c']
 	else:
-		src_drv += ['enc28j60.c']
+		src_drv += ['enc28j60.c', 'http.c']
 
 objs = objs + env.Object(src_bsp + src_drv)
 
