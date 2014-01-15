@@ -33,8 +33,8 @@
 #define LCD_REG              (*((volatile unsigned short *) 0x64000000)) /* RS = 0 */
 #define LCD_RAM              (*((volatile unsigned short *) 0x64000008)) /* RS = 1 */
 #else
-#define LCD_REG             (*(volatile unsigned short*) 0x60020000) /* RS = 0 */ 
-#define LCD_RAM             (*(volatile unsigned short*) 0x60000000) /* RS = 1 */
+#define LCD_REG             (*(volatile unsigned short*) 0x60000000) /* RS = 0 */ 
+#define LCD_RAM             (*(volatile unsigned short*) 0x60020000) /* RS = 1 */
 #endif
 
 static void _LCD_FSMCConfig(void)
@@ -467,8 +467,14 @@ static void fighting_ili9325_init(void)
 void lcd_Initializtion(void)
 {
     lcd_port_init();
-    deviceid = read_reg(0x00);
+    /* fighting ILI9325 */
+    fighting_ili9325_init();
 
+/*     deviceid = read_reg(0x00);
+ */
+    *(__IO uint16_t *)( 0x60000000 ) = 0x00;
+    deviceid = *(__IO uint16_t *) ( 0x60020000 );
+    rt_kprintf("xxx deviceid=0x%X\r\n", deviceid);
     /* deviceid check */
     if(
         (deviceid != 0x4531)
@@ -482,15 +488,13 @@ void lcd_Initializtion(void)
         printf("Invalid LCD ID:%08X\r\n",deviceid);
         printf("Please check you hardware and configure.");
         //while(1);
-        return ;
+        //return ;
     }
     else
     {
         printf("\r\nLCD Device ID : %04X ",deviceid);
     }
 
-    /* fighting ILI9325 */
-    fighting_ili9325_init();
 
     if (deviceid==0x9325|| deviceid==0x9328)
     {
