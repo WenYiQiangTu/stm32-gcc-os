@@ -72,7 +72,7 @@ void rt_init_thread_entry(void *parameter)
 #endif
        /* RTGUI Initialization */
 #ifdef RT_USING_RTGUI
-    radio_rtgui_init();
+    //radio_rtgui_init();
 #endif
 
     /* LwIP Initialization */
@@ -140,7 +140,7 @@ int rt_application_init()
     if (init_thread != RT_NULL) rt_thread_startup(init_thread);
 
 #ifdef RT_USING_RTGUI
-    today_init();
+    //today_init();
 #endif
     return 0;
 }

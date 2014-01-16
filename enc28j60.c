@@ -23,6 +23,30 @@
 #define 	ENC28J60_CS_L		GPIOA->BRR = ENC28J60_CS;
 #define 	ENC28J60_CS_H		GPIOA->BSRR = ENC28J60_CS;
 
+#define FILTER_PROMISC 0x00
+
+#define ENC28J60_DBG    rt_kprintf
+
+/* ENC28J60 Receive Status Vector */
+#define RSV_RXLONGEVDROPEV	16
+#define RSV_CARRIEREV		18
+#define RSV_CRCERROR		20
+#define RSV_LENCHECKERR		21
+#define RSV_LENOUTOFRANGE	22
+#define RSV_RXOK		23
+#define RSV_RXMULTICAST		24
+#define RSV_RXBROADCAST		25
+#define RSV_DRIBBLENIBBLE	26
+#define RSV_RXCONTROLFRAME	27
+#define RSV_RXPAUSEFRAME	28
+#define RSV_RXUNKNOWNOPCODE	29
+#define RSV_RXTYPEVLAN		30
+
+#define RSV_SIZE		6
+#define RSV_BITMASK(x)		(1 << ((x) - 16))
+#define RSV_GETBIT(x, y)	(((x) & RSV_BITMASK(y)) ? 1 : 0)
+
+
 struct net_device
 {
 	/* inherit from ethernet device */
@@ -52,7 +76,7 @@ void delay_ms(rt_uint32_t ms)
 		for (len = 0; len < 100; len++ );
 }
 
-rt_uint8_t spi_read_op(rt_uint8_t op, rt_uint8_t address)
+static rt_uint8_t spi_read_op(rt_uint8_t op, rt_uint8_t address)
 {
 	int temp=0;
 
@@ -79,7 +103,7 @@ rt_uint8_t spi_read_op(rt_uint8_t op, rt_uint8_t address)
 }
 
 // 参数: 命令,地址,数据
-void spi_write_op(rt_uint8_t op, rt_uint8_t address, rt_uint8_t data)
+static void spi_write_op(rt_uint8_t op, rt_uint8_t address, rt_uint8_t data)
 {
 	rt_uint32_t level;
 
@@ -115,7 +139,7 @@ rt_uint8_t spi_read(rt_uint8_t address)
 	return spi_read_op(ENC28J60_READ_CTRL_REG, address);
 }
 
-void spi_read_buffer(rt_uint8_t* data, rt_size_t len)
+static void enc28j60_membuf_read(rt_uint8_t* data, rt_size_t len)
 {
 	ENC28J60_CS_L;
 
@@ -363,24 +387,24 @@ rt_err_t enc28j60_init(rt_device_t dev)
     NextPacketPtr = RXSTART_INIT;
 
     // Rx start
-	spi_write(ERXSTL, RXSTART_INIT&0xFF);
-	spi_write(ERXSTH, RXSTART_INIT>>8);
-	// set receive pointer address
-	spi_write(ERXRDPTL, RXSTOP_INIT&0xFF);
-	spi_write(ERXRDPTH, RXSTOP_INIT>>8);
-	// RX end
-	spi_write(ERXNDL, RXSTOP_INIT&0xFF);
-	spi_write(ERXNDH, RXSTOP_INIT>>8);
+    spi_write(ERXSTL, RXSTART_INIT&0xFF);
+    spi_write(ERXSTH, RXSTART_INIT>>8);
+    // set receive pointer address
+    spi_write(ERXRDPTL, RXSTOP_INIT&0xFF);
+    spi_write(ERXRDPTH, RXSTOP_INIT>>8);
+    // RX end
+    spi_write(ERXNDL, RXSTOP_INIT&0xFF);
+    spi_write(ERXNDH, RXSTOP_INIT>>8);
 
-	// TX start
-	spi_write(ETXSTL, TXSTART_INIT&0xFF);
-	spi_write(ETXSTH, TXSTART_INIT>>8);
-	// set transmission pointer address
-	spi_write(EWRPTL, TXSTART_INIT&0xFF);
-	spi_write(EWRPTH, TXSTART_INIT>>8);
-	// TX end
-	spi_write(ETXNDL, TXSTOP_INIT&0xFF);
-	spi_write(ETXNDH, TXSTOP_INIT>>8);
+    // TX start
+    spi_write(ETXSTL, TXSTART_INIT&0xFF);
+    spi_write(ETXSTH, TXSTART_INIT>>8);
+    // set transmission pointer address
+    spi_write(EWRPTL, TXSTART_INIT&0xFF);
+    spi_write(EWRPTH, TXSTART_INIT>>8);
+    // TX end
+    spi_write(ETXNDL, TXSTOP_INIT&0xFF);
+    spi_write(ETXNDH, TXSTOP_INIT>>8);
 
 	// do bank 1 stuff, packet filter:
     // For broadcast packets we allow only ARP packtets
@@ -435,20 +459,23 @@ rt_err_t enc28j60_init(rt_device_t dev)
                 spi_read(MAADR3), spi_read(MAADR4), spi_read(MAADR5));
     }
 
-	/* output off */
-	spi_write(ECOCON, 0x00);
+    /* output off */
+    spi_write(ECOCON, 0x00);
 
-	// enc28j60_phy_write(PHCON1, 0x00);
-	enc28j60_phy_write(PHCON1, PHCON1_PDPXMD); // full duplex
+    // enc28j60_phy_write(PHCON1, 0x00);
+    enc28j60_phy_write(PHCON1, PHCON1_PDPXMD | enc28j60_phy_read(PHCON1)); // full duplex
     // no loopback of transmitted frames
-	enc28j60_phy_write(PHCON2, PHCON2_HDLDIS);
+    enc28j60_phy_write(PHCON2, PHCON2_HDLDIS);
 
-	enc28j60_set_bank(ECON2);
-	spi_write_op(ENC28J60_BIT_FIELD_SET, ECON2, ECON2_AUTOINC);
+    enc28j60_set_bank(ECON2);
+    spi_write_op(ENC28J60_BIT_FIELD_SET, ECON2, ECON2_AUTOINC);
 
-	// switch to bank 0
-        // phy interrupt 
-//        enc28j60_phy_write(PHIE, PHIE_PGEIE | PHIE_PLNKIE);
+    // enable the filters specifed in the 
+    spi_write(ERXFCON, FILTER_PROMISC);
+    // switch to bank 0
+    // phy interrupt 
+    //        enc28j60_phy_write(PHIE, PHIE_PGEIE | PHIE_PLNKIE);
+
 
     enc28j60_set_bank(ECON1);
     // enable interrutps
@@ -462,7 +489,8 @@ rt_err_t enc28j60_init(rt_device_t dev)
 
     enc28j60_phy_write(PHLCON, 0x476);	//0x476
     delay_ms(20);
-rt_kprintf("enc28j60_init() done\r\n");
+
+    rt_kprintf("enc28j60_init() done\r\n");
     return RT_EOK;
 }
 
@@ -576,6 +604,31 @@ rt_kprintf("End of %s()\r\n", __FUNCTION__);
     return RT_EOK;
 }
 
+static void enc28j60_dump_rsv(const char *msg, uint16_t pkt_addr, int len, uint16_t sts)
+{
+    ENC28J60_DBG(":%s - NextPkt:0x%04x - RSV\n", msg, pkt_addr);
+
+    ENC28J60_DBG( ": ByteCount: %d, DribbleNibble: %d\n", len,
+            RSV_GETBIT(sts, RSV_DRIBBLENIBBLE));
+    ENC28J60_DBG( ": RxOK: %d, CRCErr:%d, LenChkErr: %d,"
+            " LenOutOfRange: %d\n", RSV_GETBIT(sts, RSV_RXOK),
+            RSV_GETBIT(sts, RSV_CRCERROR),
+            RSV_GETBIT(sts, RSV_LENCHECKERR),
+            RSV_GETBIT(sts, RSV_LENOUTOFRANGE));
+    ENC28J60_DBG( ": Multicast: %d, Broadcast: %d, "
+            "LongDropEvent: %d, CarrierEvent: %d\n",
+            RSV_GETBIT(sts, RSV_RXMULTICAST),
+            RSV_GETBIT(sts, RSV_RXBROADCAST),
+            RSV_GETBIT(sts, RSV_RXLONGEVDROPEV),
+            RSV_GETBIT(sts, RSV_CARRIEREV));
+    ENC28J60_DBG( ": ControlFrame: %d, PauseFrame: %d,"
+            " UnknownOp: %d, VLanTagFrame: %d\n",
+            RSV_GETBIT(sts, RSV_RXCONTROLFRAME),
+            RSV_GETBIT(sts, RSV_RXPAUSEFRAME),
+            RSV_GETBIT(sts, RSV_RXUNKNOWNOPCODE),
+            RSV_GETBIT(sts, RSV_RXTYPEVLAN));   
+}
+
 static rt_uint8_t g_netbuf[64] = {0};
 struct pbuf *enc28j60_rx(rt_device_t dev)
 {
@@ -606,19 +659,20 @@ struct pbuf *enc28j60_rx(rt_device_t dev)
         NextPacketPtr  = spi_read_op(ENC28J60_READ_BUF_MEM, 0);
         NextPacketPtr |= spi_read_op(ENC28J60_READ_BUF_MEM, 0)<<8;
 
-        delay_ms(5);
         // read the packet length (see datasheet page 43)
         len  = spi_read_op(ENC28J60_READ_BUF_MEM, 0);	    //0x54
         len |= spi_read_op(ENC28J60_READ_BUF_MEM, 0) <<8;	//5554
 
         len-=4; //remove the CRC count
 
-        len = 64;
-
         // read the receive status (see datasheet page 43)
         rxstat  = spi_read_op(ENC28J60_READ_BUF_MEM, 0);
         rxstat |= ((rt_uint16_t)spi_read_op(ENC28J60_READ_BUF_MEM, 0))<<8;
-#if 0
+
+        enc28j60_membuf_read(&g_netbuf[0], RSV_SIZE);
+
+        enc28j60_dump_rsv(__FUNCTION__, NextPacketPtr, len, rxstat);
+#if 0 
         // check CRC and symbol errors (see datasheet page 44, table 7-3):
         // The ERXFCON.CRCEN is set by default. Normally we should not
         // need to check this.
@@ -666,23 +720,6 @@ struct pbuf *enc28j60_rx(rt_device_t dev)
         }
 
 #endif
-        ENC28J60_CS_L;
-        SPI_I2S_SendData(SPI1,ENC28J60_READ_BUF_MEM);
-        while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_BSY)==SET)
-        { ; }
-
-        SPI_I2S_ReceiveData(SPI1);
-
-        while(len)
-        {
-            len--;
-            SPI_I2S_SendData(SPI1,0x00);
-            while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_BSY)==SET);
-
-            *data= SPI_I2S_ReceiveData(SPI1);
-            data++;
-        }
-        ENC28J60_CS_H;
         // Move the RX read pointer to the start of the next received packet
         // This frees the memory we just read out
         spi_write(ERXRDPTL, (NextPacketPtr));
