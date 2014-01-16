@@ -1,7 +1,13 @@
 #include <rtthread.h>
 
 /* Includes ------------------------------------------------------------------*/
-
+//#include "misc.h"
+#include "stm32f10x.h"
+/* #include "math.h"
+ * 
+ * #include "stdlib.h"
+ * #include "stdio.h"
+ */
 #include "stm32f10x_i2c.h"
 #include "stm32f10x.h"
 
@@ -132,7 +138,10 @@
 
 enum tea5756_mode 
 {
-     TEA5756_MODE_START = 0, TEA5756_MODE_SEARCH = 1, TEA5756_MODE_PRESET, TEA5756_MODE_MAX
+     TEA5756_MODE_START = 0, 
+     TEA5756_MODE_SEARCH = 1,
+     TEA5756_MODE_PRESET,
+     TEA5756_MODE_MAX
 };
 
 #define TEA5756_FM_CHANNEL_MAX  50
@@ -153,8 +162,8 @@ enum tea5756_mode
 #define SDA_read      GPIOB->IDR  & GPIO_Pin_11
 
 
-static rt_bool_t I2C_ReadByte(u8* pBuffer,   u8 length,   u8 DeviceAddress);
-static rt_bool_t I2C_Start(void);
+static bool I2C_ReadByte(u8* pBuffer,   u8 length,   u8 DeviceAddress);
+static bool I2C_Start(void);
 static void I2C_delay(void);
 static void I2C_Stop(void);
 
@@ -162,16 +171,16 @@ static void I2C_Ack(void);
 
 static void I2C_NoAck(void);
 
-static rt_bool_t I2C_WaitAck(void);
+static bool I2C_WaitAck(void);
 static void I2C_SendByte(u8 SendByte);
 
 /* Private function prototypes -----------------------------------------------*/
 static void GPIO_Configuration(void);
 static void I2C_Configuration(void);
 
-static void delay_ms(rt_uint32_t ms)
+static void delay_ms(uint32_t ms)
 {
-    rt_uint32_t len;
+    uint32_t len;
     for (; ms > 0; ms --)
         for (len = 0; len < 100; len++ );
 }
@@ -185,11 +194,11 @@ static void delay_ms(rt_uint32_t ms)
   * @param  None
   * @retval : None
   */
-static rt_bool_t I2C_Write(rt_uint8_t* pBuffer, rt_uint8_t WriteAddr, rt_uint8_t NumByteToWrite)
+static bool I2C_Write(uint8_t* pBuffer, uint8_t WriteAddr, uint8_t NumByteToWrite)
 {
-    if(!I2C_Start())return RT_FALSE;
+    if(!I2C_Start())return FALSE;
     I2C_SendByte(WriteAddr);
-    if(!I2C_WaitAck()){I2C_Stop(); return RT_FALSE;}
+    if(!I2C_WaitAck()){I2C_Stop(); return FALSE;}
     while(NumByteToWrite--)
     {
         I2C_SendByte(* pBuffer);
@@ -197,7 +206,7 @@ static rt_bool_t I2C_Write(rt_uint8_t* pBuffer, rt_uint8_t WriteAddr, rt_uint8_t
         pBuffer++;
     }
     I2C_Stop(); 	
-    return RT_TRUE;
+    return TRUE;
 }
 
 /**
@@ -217,18 +226,18 @@ static void I2C_delay(void)
    } 
 }
 
-static rt_bool_t I2C_Start(void)
+static bool I2C_Start(void)
 {
     SDA_H;
     SCL_H;
     I2C_delay();
-    if(!SDA_read)return RT_FALSE;	//SDA线为低电平则总线忙,退出
+    if(!SDA_read)return FALSE;	//SDA线为低电平则总线忙,退出
     SDA_L;
     I2C_delay();
-    if(SDA_read) return RT_FALSE;	//SDA线为高电平则总线出错,退出
+    if(SDA_read) return FALSE;	//SDA线为高电平则总线出错,退出
     SDA_L;
     I2C_delay();
-    return RT_TRUE;
+    return TRUE;
 }
 
 static void I2C_Stop(void)
@@ -267,7 +276,7 @@ static void I2C_NoAck(void)
     I2C_delay();
 }
 
-static rt_bool_t I2C_WaitAck(void) 	 //返回为:=1有ACK,=0无ACK
+static bool I2C_WaitAck(void) 	 //返回为:=1有ACK,=0无ACK
 {
     SCL_L;
     I2C_delay();
@@ -278,10 +287,10 @@ static rt_bool_t I2C_WaitAck(void) 	 //返回为:=1有ACK,=0无ACK
     if(SDA_read)
     {
         SCL_L;
-        return RT_FALSE;
+        return FALSE;
     }
     SCL_L;
-    return RT_TRUE;
+    return TRUE;
 }
 
 static void I2C_SendByte(u8 SendByte) //数据从高位到低位//
@@ -327,11 +336,11 @@ static u8 I2C_ReceiveByte(void)  //数据从高位到低位//
 
 
 //读出1串数据         存放读出数据  待读出长度   器件类型(24c16或SD2403)	
-static rt_bool_t I2C_ReadByte(u8* pBuffer,   u8 length,   u8 DeviceAddress)
+static bool I2C_ReadByte(u8* pBuffer,   u8 length,   u8 DeviceAddress)
 {		
-    if(!I2C_Start())return RT_FALSE;
+    if(!I2C_Start())return FALSE;
     I2C_SendByte(DeviceAddress);//器件地址 
-    if(!I2C_WaitAck()){I2C_Stop(); return RT_FALSE;}
+    if(!I2C_WaitAck()){I2C_Stop(); return FALSE;}
 
     while(length--)
     {
@@ -342,26 +351,25 @@ static rt_bool_t I2C_ReadByte(u8* pBuffer,   u8 length,   u8 DeviceAddress)
 
     }
     I2C_Stop(); 	
-    return RT_TRUE;
+    return TRUE;
 }
 
-
-rt_bool_t tea5756_read_status(rt_uint8_t *buffer) 
+bool tea5756_read_status(uint8_t *buffer) 
 {
-    if (buffer == RT_NULL) return RT_FALSE;
+    if (buffer == RT_NULL) return FALSE;
 
     rt_memset(buffer, 0, 5);
     if (5 != I2C_ReadByte(buffer, 5, Tea5767_ReadAddress1))
     {
-        return RT_FALSE;
+        return FALSE;
     }
 
-    return RT_TRUE;
+    return TRUE;
 }
 
-int tea5756_g_rf_signal(rt_uint16_t *strength)
+int tea5756_g_rf_signal(uint16_t *strength)
 {
-   rt_uint8_t buffer[5];
+   uint8_t buffer[5];
 
    *strength = 0;
    if (0 == tea5756_read_status(&buffer[0]))
@@ -370,16 +378,16 @@ int tea5756_g_rf_signal(rt_uint16_t *strength)
    return 0;
 }
 
-rt_bool_t tea5756_stereo(const char *buffer)
+bool tea5756_stereo(const char *buffer)
 {
     int stereo = buffer[2] & TEA5767_STEREO_MASK;
 
     TEA5756_TRACE("Radio ST Get=%02x\n", stereo);
 
-    return stereo ? RT_TRUE : RT_FALSE;
+    return stereo ? TRUE : FALSE;
 }
 
-void tea5767_status_dump(rt_uint8_t *buffer)
+void tea5767_status_dump(uint8_t *buffer)
 {
     uint32_t pll_div, freq;
 
@@ -411,7 +419,7 @@ void tea5767_status_dump(rt_uint8_t *buffer)
 
 int tea5767_standby()
 {
-    rt_uint8_t buffer[5];
+    uint8_t buffer[5];
     unsigned div;
 
     /* set frequency to 87.5 Mhz*/
@@ -427,7 +435,6 @@ int tea5767_standby()
     I2C_Write(buffer, I2C1_SLAVE_ADDRESS7, 5);
     return 0;
 }
-
 
 /**
   * @brief  Configure the used I/O ports pin
@@ -499,15 +506,15 @@ static void RCC_Configuration(void)
 void amplifier_set(void)
 {
     /*  */
-    rt_uint8_t buff[] = {0X00,0Xc0,0xe0,0X41,0X6e,0X7e};
+    uint8_t buff[] = {0X00,0Xc0,0xe0,0X41,0X6e,0X7e};
     I2C_Write(&buff[0], ADDRESS_AMP, 6);
     return;
 }
 
 // vol 0 ~ 7, 7 is low volume. 
-void amplifier_tunner(rt_uint8_t vol)
+void amplifier_tunner(uint8_t vol)
 {
-    rt_uint8_t buff[] = {0X00,0X00,0xe0,0X41,0X6e,0X7e};
+    uint8_t buff[] = {0X00,0X00,0xe0,0X41,0X6e,0X7e};
    
     buff[0] |= (vol << 2);
     I2C_Write(&buff[0], ADDRESS_AMP, 6);
@@ -526,19 +533,39 @@ void amplifier_tunner(rt_uint8_t vol)
  * @param fRf Wanted tuning frequency [Hz];
  * @param opermode : Search up or Present.
  */
+
+
+static uint8_t g_txBuf[2] = {0xF0, 0x2C};
+
 void tea5756_set_radiofreq(unsigned long fRf , enum tea5756_mode opermode)
 {
+#if 0
+uint32_t pll, high, low;
+    uint8_t cmdBuf[] = {0XF0,0X2C,0XD0,0X12,0X40};
+
+    FM_PLL=(unsigned long)((4000*(fRf/1000+225))/32768); 	//计算ＰＬＬ值
+   if(opermode ==1) PLL_HIGH=(unsigned char)(((FM_PLL >> 8)&0X3f)|0xc0);	 //PLL高字节值
+   else PLL_HIGH=(unsigned char)((FM_PLL >> 8)&0X3f);	 //PLL高字节值
+   //Tx1_Buffer[0]=(Tx1_Buffer[0]&0XC0)|PLL_HIGH;		 //I2C第一字节值
+   cmdBuf[0]=PLL_HIGH;		 //I2C第一字节值
+   Tx1_Buffer[0] = PLL_HIGH;
+   PLL_LOW=(unsigned char)FM_PLL;			      		 //PLL低字节值
+   cmdBuf[1]= PLL_LOW;						 //I2C第二字节值
+   Tx1_Buffer[1] = PLL_LOW;
+   I2C_Write(cmdBuf, Tea5767_WriteAddress1, 5); 
+
+#else
     /*
      * fRef = 32768 == 32.768KHz for 32.768kHz crystal
      */
-    rt_uint32_t  fRef = 32768, fIf =  225;     
-    rt_uint8_t buffer[5] = {0x00};
-//    rt_uint8_t   buffer[5] = {0XF0,0X2C,0XD0, 0x12,0X40};
-    rt_uint32_t  pll;
+    uint32_t  fRef = 32768, fIf =  225;     
+    uint8_t buffer[5] = {0x00};
+//    uint8_t   buffer[5] = {0XF0,0X2C,0XD0, 0x12,0X40};
+    uint32_t  pll;
 
-    pll =(rt_uint32_t)((4000 *(fRf/1000 + fIf))/fRef);
+    pll =(uint32_t)((4000 *(fRf/1000 + fIf))/fRef);
 
-    buffer[0] = (rt_uint8_t) ((pll >> 8) & 0x3f);
+    buffer[0] = (uint8_t) ((pll >> 8) & 0x3f);
     if(opermode ==  TEA5756_MODE_SEARCH)
     {
         buffer[0] |= (TEA5767_MUTE | TEA5767_SEARCH);
@@ -556,40 +583,65 @@ void tea5756_set_radiofreq(unsigned long fRf , enum tea5756_mode opermode)
     // de-emphasis time const is 75 us
     buffer[4] = TEA5767_DEEMPH_75;
 
+g_txBuf[0]  = buffer[0];
+g_txBuf[1] = buffer[1];
     I2C_Write(&buffer[0], Tea5767_WriteAddress1, 5); 
+    #endif
+}
+
+static void Delay(__IO uint32_t nCount)
+{
+  for(; nCount != 0; nCount--);
 }
 
 void tea5756_auto_search()
 {
     int         ch1, ch2;
-    const rt_uint32_t delta = 100000; 
-    rt_uint8_t  rxBuf[] = {0XF0,0X2C,0XD0,0X12,0X40};
-    rt_uint32_t freq  = 87500000, fmCh[TEA5756_FM_CHANNEL_MAX]; 
+    const uint32_t delta = 100000; 
+    
+    uint8_t  rxBuf[] = {0XF0,0X2C,0XD0,0X12,0X40};
+    uint32_t freq  = 87500000, fmCh[TEA5756_FM_CHANNEL_MAX]; 
 
-    rt_kprintf("\r\n start radio search \r\n");
+    TEA5756_TRACE("\r\n start radio search \r\n");
 
     freq = 87500000 + delta;
     tea5756_set_radiofreq(freq, TEA5756_MODE_START);
-    delay_ms(50);
+    Delay(0x6fffff);
     I2C_ReadByte(rxBuf, 5, Tea5767_ReadAddress1);
 
     ch2 = 0;
     while(1)
     {
+        rt_memset(rxBuf, 0x00, 5); 
         // add 100kHz to the tuning memory
         freq = freq + delta;
         if (freq > 108000000) {freq = DEFAULT_FM; break;}
-        tea5756_set_radiofreq(freq, TEA5756_MODE_SEARCH);
+        tea5756_set_radiofreq(freq, TEA5756_MODE_PRESET);
         
         // wait 10ms, have the singal available?
-        delay_ms(20);   
+        //delay_ms(200);   
+        Delay(0x0fffff);
         if (!I2C_ReadByte(rxBuf, 5, Tea5767_ReadAddress1))
             break;
         
         // the band limit has been reached 
         if (rxBuf[0] & TEA5767_BAND_LIMIT_MASK)
             break;
-        
+        if((rxBuf[0]&0x3f)!=(g_txBuf[0]&0x3f)||(rxBuf[1]!=g_txBuf[1])
+            || (rxBuf[1]&0x80!=0x80)
+            || (rxBuf[2]<50|| rxBuf[2]>=56)
+            || (rxBuf[3]>>4)<7||(rxBuf[3]>>4)>14)
+        {
+            rt_kprintf("\r\n 当前FM频率是:   %u Hz \r\n", freq); 
+        }
+        else
+        {
+            TEA5756_TRACE("current radio freq:%u(Hz), ADC level=%d\r\n", freq, (uint8_t) (rxBuf[3] >> 4)); 
+            fmCh[ch2++]= freq;                    
+            if (ch2 > TEA5756_FM_CHANNEL_MAX) break;
+        }
+
+        /*
         // signal freq found
         if ((rxBuf[0] & TEA5767_READY_FLAG_MASK) 
             // if counter result
@@ -598,48 +650,48 @@ void tea5756_auto_search()
             && ((rxBuf[3] >> 4 ) > 7) && ((rxBuf[3] >> 4 < 14)))
         {
             // tea5767_status_dump(&rxBuf[0]);
-            rt_kprintf("current radio freq:%u(Hz), ADC level=%d\r\n", freq, (rt_uint8_t) (rxBuf[3] >> 4)); 
+            TEA5756_TRACE("current radio freq:%u(Hz), ADC level=%d\r\n", freq, (uint8_t) (rxBuf[3] >> 4)); 
             fmCh[ch2++]= freq;                    
             if (ch2 > TEA5756_FM_CHANNEL_MAX) break;
         }
         else 
         {
-            rt_kprintf("no singal \r\n");
-        }
-        rt_memset(rxBuf, 0x00, 5); 
+            TEA5756_TRACE("no singal \r\n");
+        }        
+        */
     }
 
-    rt_kprintf("\r\n total effective radio channel #%u\r\n", ch2); 
+    TEA5756_TRACE("\r\n total effective radio channel #%u\r\n", ch2); 
 /*     ch1 = ch2;
  *     while(ch1--)
  *     {
- *         rt_kprintf("\r\n %u  FM频率: %u  MHz \n",ch1, fmCh[ch1]); 
+ *         TEA5756_TRACE("\r\n %u  FM频率: %u  MHz \n",ch1, fmCh[ch1]); 
  *     }
  */
 }
 
-rt_bool_t tea5756_autodetection(void)
+bool tea5756_autodetection(void)
 {
-    rt_uint8_t rxBuf[7] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; 
+    uint8_t rxBuf[7] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; 
 
     I2C_ReadByte(rxBuf, 7, Tea5767_ReadAddress1);
 
     if (rxBuf[0] == rxBuf[1] && rxBuf[0] == rxBuf[2]
             && rxBuf[0] == rxBuf[3] && rxBuf[0] == rxBuf[4])
     {
-        rt_kprintf("all bytes are equal, not tea5767 chip found.\r\n");
-        return RT_FALSE;
+        TEA5756_TRACE("all bytes are equal, not tea5767 chip found.\r\n");
+        return FALSE;
     }
 
     // Read Byte 4 : CI[3:1] = 0, Byte 5 : 0
     if ((rxBuf[3] & 0x0f) != 0x00 && (rxBuf[4] != 0x00)) 
     {
-        rt_kprintf("chip id CI[3:1] not all zeros, not tea5767 chip\r\n");
-        return RT_FALSE;
+        TEA5756_TRACE("chip id CI[3:1] not all zeros, not tea5767 chip\r\n");
+        return FALSE;
     }
 
-    rt_kprintf("found tea5767 chip\r\n");
-    return RT_TRUE;
+    TEA5756_TRACE("found tea5767 chip\r\n");
+    return TRUE;
 }
 
 /**
@@ -654,10 +706,10 @@ void tea5756_hardware_init()
  */
     amplifier_tunner(7);
 
-    tea5756_set_radiofreq(DEFAULT_FM, TEA5756_MODE_START);
+    //tea5756_set_radiofreq(DEFAULT_FM, TEA5756_MODE_START);
 
-/*     tea5756_auto_search();
- */
+    tea5756_auto_search();
+
 }
 
 #ifdef RT_USING_FINSH
@@ -665,7 +717,13 @@ void tea5756_hardware_init()
 
 void radio_search()
 {
-    tea5756_auto_search();
+    tea5756_autodetection();
+
+    amplifier_tunner(7);
+
+    tea5756_set_radiofreq(93100000, TEA5756_MODE_PRESET);
+
+//    tea5756_auto_search();
 }
 FINSH_FUNCTION_EXPORT(radio_search, radio auto search);
 #endif
