@@ -2,6 +2,8 @@
 #include "rtthread.h"
 #include "board.h"
 
+#ifdef RT_USING_GUI
+
 #include <rtgui/rtgui.h>
 #include <rtgui/driver.h>
 #include <rtgui/rtgui_server.h>
@@ -218,3 +220,5 @@ void brightness_set(unsigned int value)
     TIM_OC1Init(TIM4, &TIM_OCInitStructure);
 #endif
 }
+
+#endif

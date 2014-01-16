@@ -187,13 +187,13 @@ void enc28j60_clkout(rt_uint8_t clk)
 
 rt_inline rt_uint32_t enc28j60_interrupt_disable()
 {
-    rt_uint32_t level;
+	rt_uint32_t level;
 
     /* switch to bank 0 */
     enc28j60_set_bank(EIE);
 
     /* get last interrupt level */
-    level = spi_read(EIE);
+	level = spi_read(EIE);
     /* disable interrutps */
     spi_write_op(ENC28J60_BIT_FIELD_CLR, EIE, level);
 
@@ -278,10 +278,23 @@ void enc28j60_isr()
 
     /* get EIR */
     eir = spi_read(EIR);
-    // rt_kprintf("eir: 0x%08x\n", eir);
+    rt_kprintf("eir: 0x%08x\n", eir);
 
     do
     {
+        /* errata #4, PKTIF does not reliable */
+        pk_counter = spi_read(EPKTCNT);
+        if (pk_counter)
+        {
+            /* a frame has been received */
+            eth_device_ready((struct eth_device*)&(enc28j60_dev->parent));
+
+            // switch to bank 0
+            enc28j60_set_bank(EIE);
+            // disable rx interrutps
+            spi_write_op(ENC28J60_BIT_FIELD_CLR, EIE, EIE_PKTIE);
+        }
+
         /* clear PKTIF */
         if (eir & EIR_PKTIF)
         {
@@ -327,15 +340,6 @@ void enc28j60_isr()
             spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_TXERIF);
         }
 
-        // RX Error handler
-        if ((eir & EIR_RXERIF) != 0)
-        {
-            rt_kprintf("enc28j60 rx error\r\n");
-            spi_write_op(ENC28J60_BIT_FIELD_CLR, EIR, EIR_RXERIF);
-        }
-        // RX handler, fire the ethernetif.c rx thread to handle enc28j60 rx handler.
-        eth_device_ready(&(enc28j60_dev_entry.parent));
-        
         eir = spi_read(EIR);
         // rt_kprintf("inner eir: 0x%08x\n", eir);
     } while ((rx_activiated != RT_TRUE && eir != 0));
@@ -359,26 +363,26 @@ rt_err_t enc28j60_init(rt_device_t dev)
     NextPacketPtr = RXSTART_INIT;
 
     // Rx start
-    spi_write(ERXSTL, RXSTART_INIT&0xFF);
-    spi_write(ERXSTH, RXSTART_INIT>>8);
-    // set receive pointer address
-    spi_write(ERXRDPTL, RXSTOP_INIT&0xFF);
-    spi_write(ERXRDPTH, RXSTOP_INIT>>8);
-    // RX end
-    spi_write(ERXNDL, RXSTOP_INIT&0xFF);
-    spi_write(ERXNDH, RXSTOP_INIT>>8);
+	spi_write(ERXSTL, RXSTART_INIT&0xFF);
+	spi_write(ERXSTH, RXSTART_INIT>>8);
+	// set receive pointer address
+	spi_write(ERXRDPTL, RXSTOP_INIT&0xFF);
+	spi_write(ERXRDPTH, RXSTOP_INIT>>8);
+	// RX end
+	spi_write(ERXNDL, RXSTOP_INIT&0xFF);
+	spi_write(ERXNDH, RXSTOP_INIT>>8);
 
-    // TX start
-    spi_write(ETXSTL, TXSTART_INIT&0xFF);
-    spi_write(ETXSTH, TXSTART_INIT>>8);
-    // set transmission pointer address
-    spi_write(EWRPTL, TXSTART_INIT&0xFF);
-    spi_write(EWRPTH, TXSTART_INIT>>8);
-    // TX end
-    spi_write(ETXNDL, TXSTOP_INIT&0xFF);
-    spi_write(ETXNDH, TXSTOP_INIT>>8);
+	// TX start
+	spi_write(ETXSTL, TXSTART_INIT&0xFF);
+	spi_write(ETXSTH, TXSTART_INIT>>8);
+	// set transmission pointer address
+	spi_write(EWRPTL, TXSTART_INIT&0xFF);
+	spi_write(EWRPTH, TXSTART_INIT>>8);
+	// TX end
+	spi_write(ETXNDL, TXSTOP_INIT&0xFF);
+	spi_write(ETXNDH, TXSTOP_INIT>>8);
 
-    // do bank 1 stuff, packet filter:
+	// do bank 1 stuff, packet filter:
     // For broadcast packets we allow only ARP packtets
     // All other packets should be unicast only for our mac (MAADR)
     //
@@ -388,33 +392,31 @@ rt_err_t enc28j60_init(rt_device_t dev)
     // 06 08 -- ff ff ff ff ff ff -> ip checksum for theses bytes=f7f9
     // in binary these poitions are:11 0000 0011 1111
     // This is hex 303F->EPMM0=0x3f,EPMM1=0x30
-    spi_write(ERXFCON, ERXFCON_UCEN|ERXFCON_CRCEN|ERXFCON_BCEN);
+	spi_write(ERXFCON, ERXFCON_UCEN|ERXFCON_CRCEN|ERXFCON_BCEN);
 
-    // do bank 2 stuff
-    // enable MAC receive
-    spi_write(MACON1, MACON1_MARXEN|MACON1_TXPAUS|MACON1_RXPAUS);
-    // enable automatic padding to 60bytes and CRC operations
-    // spi_write_op(ENC28J60_BIT_FIELD_SET, MACON3, MACON3_PADCFG0|MACON3_TXCRCEN|MACON3_FRMLNEN);
-    spi_write_op(ENC28J60_BIT_FIELD_SET, MACON3, MACON3_PADCFG0 | MACON3_TXCRCEN | MACON3_FRMLNEN | MACON3_FULDPX);
+	// do bank 2 stuff
+	// enable MAC receive
+	spi_write(MACON1, MACON1_MARXEN|MACON1_TXPAUS|MACON1_RXPAUS);
+	// enable automatic padding to 60bytes and CRC operations
+	// spi_write_op(ENC28J60_BIT_FIELD_SET, MACON3, MACON3_PADCFG0|MACON3_TXCRCEN|MACON3_FRMLNEN);
+	spi_write_op(ENC28J60_BIT_FIELD_SET, MACON3, MACON3_PADCFG0 | MACON3_TXCRCEN | MACON3_FRMLNEN | MACON3_FULDPX);
+	// bring MAC out of reset
 
-    // bring MAC out of reset
-    spi_write(MACON2, 0x00);
+	// set inter-frame gap (back-to-back)
+	// spi_write(MABBIPG, 0x12);
+	spi_write(MABBIPG, 0x15);
 
-    // set inter-frame gap (back-to-back)
-    // spi_write(MABBIPG, 0x12);
-    spi_write(MABBIPG, 0x15);
+	spi_write(MACON4, MACON4_DEFER);
+	spi_write(MACLCON2, 63);
 
-    spi_write(MACON4, MACON4_DEFER);
-    spi_write(MACLCON2, 63);
+	// set inter-frame gap (non-back-to-back)
+	spi_write(MAIPGL, 0x12);
+	spi_write(MAIPGH, 0x0C);
 
-    // set inter-frame gap (non-back-to-back)
-    spi_write(MAIPGL, 0x12);
-    spi_write(MAIPGH, 0x0C);
-
-    // Set the maximum packet size which the controller will accept
-    // Do not send packets longer than MAX_FRAMELEN:
-    spi_write(MAMXFLL, MAX_FRAMELEN&0xFF);
-    spi_write(MAMXFLH, MAX_FRAMELEN>>8);
+	// Set the maximum packet size which the controller will accept
+	// Do not send packets longer than MAX_FRAMELEN:
+	spi_write(MAMXFLL, MAX_FRAMELEN&0xFF);
+	spi_write(MAMXFLH, MAX_FRAMELEN>>8);
 
     // do bank 3 stuff
     // write MAC address
@@ -433,20 +435,20 @@ rt_err_t enc28j60_init(rt_device_t dev)
                 spi_read(MAADR3), spi_read(MAADR4), spi_read(MAADR5));
     }
 
-    /* output CLK off */
-    spi_write(ECOCON, 0x00);
+	/* output off */
+	spi_write(ECOCON, 0x00);
 
-    // enc28j60_phy_write(PHCON1, 0x00);
-    enc28j60_phy_write(PHCON1, PHCON1_PDPXMD); // full duplex
+	// enc28j60_phy_write(PHCON1, 0x00);
+	enc28j60_phy_write(PHCON1, PHCON1_PDPXMD); // full duplex
     // no loopback of transmitted frames
-    enc28j60_phy_write(PHCON2, PHCON2_HDLDIS);
+	enc28j60_phy_write(PHCON2, PHCON2_HDLDIS);
 
-    enc28j60_set_bank(ECON2);
-    spi_write_op(ENC28J60_BIT_FIELD_SET, ECON2, ECON2_AUTOINC);
+	enc28j60_set_bank(ECON2);
+	spi_write_op(ENC28J60_BIT_FIELD_SET, ECON2, ECON2_AUTOINC);
 
-    // switch to bank 0
-    // phy interrupt 
-    //        enc28j60_phy_write(PHIE, PHIE_PGEIE | PHIE_PLNKIE);
+	// switch to bank 0
+        // phy interrupt 
+//        enc28j60_phy_write(PHIE, PHIE_PGEIE | PHIE_PLNKIE);
 
     enc28j60_set_bank(ECON1);
     // enable interrutps
@@ -460,7 +462,7 @@ rt_err_t enc28j60_init(rt_device_t dev)
 
     enc28j60_phy_write(PHLCON, 0x476);	//0x476
     delay_ms(20);
-
+rt_kprintf("enc28j60_init() done\r\n");
     return RT_EOK;
 }
 
@@ -569,9 +571,12 @@ rt_err_t enc28j60_tx( rt_device_t dev, struct pbuf* p)
     enc28j60_interrupt_enable(level);
     rt_sem_release(&lock_sem);
 
+rt_kprintf("End of %s()\r\n", __FUNCTION__);
+
     return RT_EOK;
 }
 
+static rt_uint8_t g_netbuf[64] = {0};
 struct pbuf *enc28j60_rx(rt_device_t dev)
 {
     struct pbuf* p;
@@ -579,8 +584,11 @@ struct pbuf *enc28j60_rx(rt_device_t dev)
     rt_uint16_t rxstat;
     rt_uint32_t pk_counter;
     rt_uint32_t level;
+    rt_uint8_t *data = g_netbuf;
 
     p = RT_NULL;
+
+    rt_kprintf("In enc28j60_rx()\r\n");
 
     /* lock enc28j60 */
     rt_sem_take(&lock_sem, RT_WAITING_FOREVER);
@@ -598,25 +606,30 @@ struct pbuf *enc28j60_rx(rt_device_t dev)
         NextPacketPtr  = spi_read_op(ENC28J60_READ_BUF_MEM, 0);
         NextPacketPtr |= spi_read_op(ENC28J60_READ_BUF_MEM, 0)<<8;
 
+        delay_ms(5);
         // read the packet length (see datasheet page 43)
         len  = spi_read_op(ENC28J60_READ_BUF_MEM, 0);	    //0x54
         len |= spi_read_op(ENC28J60_READ_BUF_MEM, 0) <<8;	//5554
 
         len-=4; //remove the CRC count
 
+        len = 64;
+
         // read the receive status (see datasheet page 43)
         rxstat  = spi_read_op(ENC28J60_READ_BUF_MEM, 0);
         rxstat |= ((rt_uint16_t)spi_read_op(ENC28J60_READ_BUF_MEM, 0))<<8;
-
+#if 0
         // check CRC and symbol errors (see datasheet page 44, table 7-3):
         // The ERXFCON.CRCEN is set by default. Normally we should not
         // need to check this.
+		/*
         if ((rxstat & 0x80)==0)
         {
             // invalid
             len=0;
         }
         else
+		*/
         {
             /* allocation pbuf */
             p = pbuf_alloc(PBUF_LINK, len, PBUF_RAM);
@@ -652,6 +665,24 @@ struct pbuf *enc28j60_rx(rt_device_t dev)
             }
         }
 
+#endif
+        ENC28J60_CS_L;
+        SPI_I2S_SendData(SPI1,ENC28J60_READ_BUF_MEM);
+        while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_BSY)==SET)
+        { ; }
+
+        SPI_I2S_ReceiveData(SPI1);
+
+        while(len)
+        {
+            len--;
+            SPI_I2S_SendData(SPI1,0x00);
+            while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_BSY)==SET);
+
+            *data= SPI_I2S_ReceiveData(SPI1);
+            data++;
+        }
+        ENC28J60_CS_H;
         // Move the RX read pointer to the start of the next received packet
         // This frees the memory we just read out
         spi_write(ERXRDPTL, (NextPacketPtr));
@@ -703,10 +734,10 @@ static void GPIO_Configuration()
     GPIO_InitTypeDef GPIO_InitStructure;
     EXTI_InitTypeDef EXTI_InitStructure;
 
-    /* configure PA1 as external interrupt */
+    /* configure PB13 as external interrupt */
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
     /* Configure SPI1 pins:  SCK, MISO and MOSI ----------------------------*/
@@ -745,7 +776,8 @@ static void SetupSPI (void)
     SPI_InitStructure.SPI_CPOL = SPI_CPOL_Low;
     SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;
     SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
-    SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_8;//SPI_BaudRatePrescaler_4;
+    //SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_8;//SPI_BaudRatePrescaler_4;
+    SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_4;
     SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
     SPI_InitStructure.SPI_CRCPolynomial = 7;
     SPI_Init(SPI1, &SPI_InitStructure);
@@ -767,7 +799,7 @@ void rt_hw_enc28j60_init()
     enc28j60_dev_entry.parent.parent.close		= enc28j60_close;
     enc28j60_dev_entry.parent.parent.read		= enc28j60_read;
     enc28j60_dev_entry.parent.parent.write		= enc28j60_write;
-    enc28j60_dev_entry.parent.parent.control	        = enc28j60_control;
+    enc28j60_dev_entry.parent.parent.control	= enc28j60_control;
     enc28j60_dev_entry.parent.eth_rx			= enc28j60_rx;
     enc28j60_dev_entry.parent.eth_tx			= enc28j60_tx;
 
