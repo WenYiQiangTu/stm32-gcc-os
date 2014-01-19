@@ -302,7 +302,7 @@ void enc28j60_isr()
 
     /* get EIR */
     eir = spi_read(EIR);
-    rt_kprintf("eir: 0x%08x\n", eir);
+    //rt_kprintf("eir: 0x%08x\n", eir);
 
     do
     {
@@ -467,8 +467,8 @@ rt_err_t enc28j60_init(rt_device_t dev)
     // no loopback of transmitted frames
     enc28j60_phy_write(PHCON2, PHCON2_HDLDIS);
 
-    enc28j60_set_bank(ECON2);
-    spi_write_op(ENC28J60_BIT_FIELD_SET, ECON2, ECON2_AUTOINC);
+    //enc28j60_set_bank(ECON2);
+    //spi_write_op(ENC28J60_BIT_FIELD_SET, ECON2, ECON2_AUTOINC);
 
     // enable the filters specifed in the 
     spi_write(ERXFCON, FILTER_PROMISC);
@@ -549,7 +549,7 @@ rt_err_t enc28j60_tx( rt_device_t dev, struct pbuf* p)
     rt_uint8_t* ptr;
     rt_uint32_t level;
 
-    rt_kprintf("tx pbuf: 0x%08x, total len %d\n", p, p->tot_len);
+    //rt_kprintf("tx pbuf: 0x%08x, total len %d\n", p, p->tot_len);
 
     /* lock enc28j60 */
     rt_sem_take(&lock_sem, RT_WAITING_FOREVER);
@@ -599,8 +599,6 @@ rt_err_t enc28j60_tx( rt_device_t dev, struct pbuf* p)
     enc28j60_interrupt_enable(level);
     rt_sem_release(&lock_sem);
 
-rt_kprintf("End of %s()\r\n", __FUNCTION__);
-
     return RT_EOK;
 }
 
@@ -641,7 +639,7 @@ struct pbuf *enc28j60_rx(rt_device_t dev)
 
     p = RT_NULL;
 
-    rt_kprintf("In enc28j60_rx()\r\n");
+    //rt_kprintf("In enc28j60_rx()\r\n");
 
     /* lock enc28j60 */
     rt_sem_take(&lock_sem, RT_WAITING_FOREVER);
@@ -669,21 +667,16 @@ struct pbuf *enc28j60_rx(rt_device_t dev)
         rxstat  = spi_read_op(ENC28J60_READ_BUF_MEM, 0);
         rxstat |= ((rt_uint16_t)spi_read_op(ENC28J60_READ_BUF_MEM, 0))<<8;
 
-        enc28j60_membuf_read(&g_netbuf[0], RSV_SIZE);
-
-        enc28j60_dump_rsv(__FUNCTION__, NextPacketPtr, len, rxstat);
-#if 0 
+//enc28j60_dump_rsv(__FUNCTION__, NextPacketPtr,  len, rxstat);
         // check CRC and symbol errors (see datasheet page 44, table 7-3):
         // The ERXFCON.CRCEN is set by default. Normally we should not
         // need to check this.
-		/*
         if ((rxstat & 0x80)==0)
         {
             // invalid
             len=0;
         }
         else
-		*/
         {
             /* allocation pbuf */
             p = pbuf_alloc(PBUF_LINK, len, PBUF_RAM);
@@ -719,7 +712,6 @@ struct pbuf *enc28j60_rx(rt_device_t dev)
             }
         }
 
-#endif
         // Move the RX read pointer to the start of the next received packet
         // This frees the memory we just read out
         spi_write(ERXRDPTL, (NextPacketPtr));
@@ -757,25 +749,62 @@ static void RCC_Configuration(void)
 static void NVIC_Configuration(void)
 {
     NVIC_InitTypeDef NVIC_InitStructure;
-
-    /* Enable the EXTI0 Interrupt */
-    NVIC_InitStructure.NVIC_IRQChannel = EXTI1_IRQn;
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
-    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    EXTI_InitTypeDef EXTI_InitStructure;
+    /* Configure one bit for preemption priority */
+    /* ÓÅÏÈ¼¶×é ËµÃ÷ÁËÇÀÕ¼ÓÅÏÈ¼¶ËùÓÃµÄÎ»Êý£¬ºÍ×ÓÓÅÏÈ¼¶ËùÓÃµÄÎ»Êý   ÔÚÕâÀïÊÇ1£¬ 7 */    
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);
+    
+    /* Enable the EXTI2 Interrupt */
+    NVIC_InitStructure.NVIC_IRQChannel = EXTI1_IRQn;               //Íâ²¿ÖÐ¶Ï2
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;      //ÇÀÕ¼ÓÅÏÈ¼¶ 0
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;             //×ÓÓÅÏÈ¼¶0  
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;                //Ê¹ÄÜ
     NVIC_Init(&NVIC_InitStructure);
+    
+    //ÓÃÓÚÅäÖÃAFIOÍâ²¿ÖÐ¶ÏÅäÖÃ¼Ä´æÆ÷AFIO_EXTICR1£¬ÓÃÓÚÑ¡ÔñEXTI2Íâ²¿ÖÐ¶ÏµÄÊäÈëÔ´ÊÇPE2¡£
+    GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource1);     //Íâ²¿ÖÐ¶ÏÅäÖÃAFIO--ETXI2
+    
+    EXTI_InitStructure.EXTI_Line = EXTI_Line1;                      //PE2 ×÷Îª¼üÅÌµÄÐÐÏß¡£¼ì²â×´Ì¬
+    EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;             //ÖÐ¶ÏÄ£Ê½
+    EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling;         //ÏÂ½µÑØ´¥·¢
+    EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&EXTI_InitStructure);
+
+    EXTI_ClearITPendingBit(EXTI_Line1);
+
 }
 
 static void GPIO_Configuration()
 {
     GPIO_InitTypeDef GPIO_InitStructure;
-    EXTI_InitTypeDef EXTI_InitStructure;
+//    EXTI_InitTypeDef EXTI_InitStructure;
 
+
+//-------------------------------------------------
+    RCC_APB2PeriphClockCmd( RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB |
+                           RCC_APB2Periph_GPIOC, ENABLE);
+
+    
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;					 //SST25VF016B SPIÆ¬Ñ
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOC, &GPIO_InitStructure);
+  
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12|GPIO_Pin_7;		 //PB12---VS1003 SPIÆ¬Ñ¡£¨V2.1) 
+    GPIO_Init(GPIOB, &GPIO_InitStructure);					 //PB7---´¥ÃþÆÁÐ¾Æ¬XPT2046 SPI Æ¬Ñ¡
+      /* ½ûÖ¹SPI1×ÜÏßÉÏµÄÆäËûÉè±¸ */
+ 
+    GPIO_SetBits(GPIOB, GPIO_Pin_7);						     //´¥ÃþÆÁÐ¾Æ¬XPT2046 SPI Æ¬Ñ¡½ûÖ¹  
+//    GPIO_SetBits(GPIOB, GPIO_Pin_12);						     //VS1003 SPIÆ¬Ñ¡£¨V2.1)½ûÖ¹ 
+//    GPIO_SetBits(GPIOC, GPIO_Pin_4);						     //SST25VF016B SPIÆ¬Ñ¡½ûÖ¹  
+ 
+//-------------------------------------------------  
     /* configure PB13 as external interrupt */
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
+
 
     /* Configure SPI1 pins:  SCK, MISO and MOSI ----------------------------*/
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7;
@@ -787,7 +816,7 @@ static void GPIO_Configuration()
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
-
+#if 0
     /* Connect ENC28J60 EXTI Line to GPIOB Pin 2 */
     GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource1);
 
@@ -800,6 +829,7 @@ static void GPIO_Configuration()
 
     /* Clear the Key Button EXTI line pending bit */
     EXTI_ClearITPendingBit(EXTI_Line1);
+#endif    
 }
 
 static void SetupSPI (void)
