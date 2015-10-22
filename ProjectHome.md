@@ -1,0 +1,1 @@
+say hello to stm32 using codesourcy G++ lite toolchain. Porting ucos operating system and lwip IP/TCP stack to stm32.
